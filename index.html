@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        body {
+    font-family: Arial, sans-serif;
+}
+
+.content h1{
+   
+        float: left;
+        margin-bottom: 0.2rem;
+        padding-left: 0.65rem;
+  
+
+    select {
+        float: right;
+        margin-top: 1.2rem;
+        margin-right: 0.65rem;
+    }
+}
+
+
+.content select{
+   
+   
+   float: right;
+   margin-top: 1.2rem;
+   margin-right: 0.65rem;
+
+}
+
+.jQBracket {
+    font-size: 12px;
+}
+
+.bracket-icon {
+    margin-top: -2px;
+    margin-right: 4px;
+    height: 1rem;
+    float: left;
+}
+    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torneios de Rugby</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="index.scss" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-bracket/0.11.0/jquery.bracket.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-bracket/0.11.0/jquery.bracket.min.css">
+</head>
+<body>
+    <div class="content">
+        <div class="content">
+            <div class="top-bar">
+                <h1>TESTANDO API DE TORNEIO</h1>
+                <select id="select-bracket">
+                    <option value="2012seniormensd1" selected>TEST 2012</option>
+                    <option value="2005seniorwomensd1">TEST 2005</option>
+                    <option value="2004seniormensd1">TEST 2004</option>
+                    <option value="2003seniorwomensd1">TEST 2003</option>
+                    <option value="1999seniorwomensd1">TEST 199</option>
+                    <option value="1996seniormensd1">TEST 96>/option>
+                </select>
+            </div>
+            <div id="bracket"></div>
+        </div>
+
+    <script>
+        ( function( _, $ ) {
+    /**
+     * Generate a rugby tournament bracket via AJAX.
+     *
+     * @param {string} bracket The specified tournament pathname.
+     *
+     * @return {void}
+     */
+    function req( bracket ) {
+        $.ajax({
+            url: 'https://api.challonge.com/v1/tournaments/' + bracket,
+            crossDomain: true,
+            data: {
+                api_key: 'uBvljtnUvXdkeT3lqmq2mTypstDO4W4tZ0DrY4S2',
+                include_participants: 1,
+                include_matches: 1,
+                format: 'json'
+            },
+            dataType: 'json',
+            success: function( response ) {
+                var _teams     = [],
+                    result     = [],
+                    match      = [],
+                    teams      = [],
+                    results    = [],
+                    match_list = [];
+
+                var matches      = response.tournament.matches,
+                    participants = response.tournament.participants;
+
+                // Tournament
+                $( 'h1' ).empty().append( 'TEST DA API' );
+
+                // Team object.
+                _.each( participants, function( p ) {
+                    _teams[ p.participant.id ] = {
+                        'name': p.participant.name,
+                        'flag': p.participant.attached_participatable_portrait_url
+                    };
+                });
+
+                // Match, result, round, and results.
+                _.each( matches, function( m ) {
+                    // Single match.
+                    match[ m.match.id ] = [ _teams[ m.match.player1_id ], _teams[ m.match.player2_id ] ];
+                    // Single match result.
+                    var scores = m.match.scores_csv.split( '-' );
+                    result[ m.match.id ] = [ parseInt( scores[0], 10 ), parseInt( scores[1], 10 ) ];
+                    // Round of matches.
+                    teams[ m.match.round ] = [];
+                    // Round of match results.
+                    results[ m.match.round ] = [];
+                });
+
+                // Rounds and results.
+                _.each( matches, function( m ) {
+                    teams[ m.match.round ].push( match[ m.match.id ] );
+                    results[ m.match.round ].push( result[ m.match.id ] );
+                });
+
+                // Remove any falsly results.
+                results = _.filter( results );
+
+                // Group matches by round.
+                var final_matches = [ teams[ teams.length - 1 ][0], teams[1][0] ];
+                teams.shift();
+                teams.pop();
+                teams.push( final_matches );
+
+                // Championship rounds require the consolation final to be last.
+                var finals = [ results[ results.length - 1 ][0], results[0][0] ];
+
+                results.shift();
+                results.pop();
+                results.push( finals );
+
+                $( '#bracket' ).bracket({
+                    teamWidth: 200,
+                    scoreWidth: 30,
+                    matchMargin: 10,
+                    roundMargin: 15,
+                    centerConnectors: true,
+                    disableToolbar: true,
+                    init: {
+                        'teams': teams[0],
+                        'results': results
+                    },
+                    save: function(){},
+                    decorator: {
+                        edit: function(){},
+                        render: function( container, data, score, state ) {
+                            switch ( state ) {
+                                case 'empty-bye':
+                                    container.append( 'No team' );
+                                    break;
+                                case 'empty-tbd':
+                                    container.append( 'Upcoming' );
+                                    break;
+                                case 'entry-no-score':
+                                case 'entry-default-win':
+                                case 'entry-complete':
+                                    if ( _.isEmpty( data.flag ) ) {
+                                        container.append( '<span class="bracket-team">' + data.name + '</span>' );
+                                    }
+                                    else {
+                                        container.append( '<img class="bracket-icon" src="https:' + data.flag + '" alt="' + data.name + '" /><span class="bracket-team">' + data.name + '</span>' );
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+                });
+            },
+            error: function( jqXHR, textStatus, errorThrown ) {
+                this.success( jqXHR.responseJSON );
+            }
+        });
+    }
+
+    // Trigger new request on change.
+    $( '#select-bracket' ).change( function( e ) {
+        $( '#bracket' ).empty();
+        req( e.target.value );
+    });
+
+    // Load 2012 Men's Club D1 by default.
+    $( document ).ready( function() {
+        req( '2012seniormensd1' );
+    });
+
+})( _, jQuery );
+    </script>
+</body>
+</html>
